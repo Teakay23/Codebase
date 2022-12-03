@@ -125,7 +125,8 @@ def handle_login_request(clientSocket, package):
         try:
             packageWithHash = hash_package(responsePackage)
             serializedData = pickle.dumps(packageWithHash)
-            clientSocket.send(serializedData)
+            encryptedData = RSA_Methods.encrypt(RSA_Methods.RSA.import_key(package["key"]), serializedData)
+            clientSocket.send(encryptedData)
         except:
             print("Server> Could not login send response.")
 
@@ -162,7 +163,7 @@ except Error as e:
 
 server_ip = "localhost"
 server_port = 7000
-# generate server keys here
+RSA_Methods.generate_keys("server")
 
 try:
     socketObj = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

@@ -138,10 +138,13 @@ def register_user():
             return "back"
 
 def send_login_message(username, password):
+    RSA_Methods.generate_keys("temp")
+
     package = {
         "header" : "login",
         "username" : username,
         "password" : hash_value(password),
+        "key" : RSA_Methods.retrieve_public_key("temp").export_key()
     }
 
     packageWithHash = hash_package(package)
@@ -166,6 +169,7 @@ def send_login_message(username, password):
         serverSocket.close()
         return "fail"
 
+    response = RSA_Methods.decrypt(RSA_Methods.retrieve_private_key("temp"), response)
     response = pickle.loads(response)
 
     if hash_matches(response["package"], response["hash"]):
@@ -228,4 +232,4 @@ def login():
 server_ip = "localhost"
 server_port = 7000
 
-register_user()
+login()
