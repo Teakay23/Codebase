@@ -38,6 +38,7 @@ def listen_for_connections():
 
     while(1):
         clientSocket, clientAddress = socketObj.accept()
+        print("Server> Connected to address: ", clientAddress)
 
         request_handler = threading.Thread(target=listen_for_requests, args=(clientSocket, clientAddress))
         request_handler.start()
@@ -49,7 +50,7 @@ def listen_for_requests(clientSocket, clientAddress):
     package = packageWithHash["package"]
     
     if not hash_matches(package, packageWithHash["hash"]):
-        print("Received request was corrupted")
+        print("Server> Received request was corrupted.")
         return
 
     header = package["header"]
@@ -73,23 +74,29 @@ def listen_for_requests(clientSocket, clientAddress):
 
 # main functionality
 def handle_register_request(clientSocket, package):
-    dbcursor = dbconnection.cursor()
-    dbcursor.execute("SELECT username FROM Users WHERE username = %s;", (package["username"],))
-    rows = dbcursor.fetchall()
+    try:
+        dbcursor = dbconnection.cursor()
+        dbcursor.execute("SELECT username FROM Users WHERE username = %s;", (package["username"],))
+        rows = dbcursor.fetchall()
 
-    if len(rows) > 0:
-        responsePackage = "exists"
-    else:
-        hashedPassword, salt = hash_value_with_salt(package["password"])
-        dbcursor.execute("INSERT INTO Users VALUES(%s, %s, %s, %s);", (package["username"], hashedPassword, salt, pickle.dumps(package["key"]),))
-        dbconnection.commit()
+        if len(rows) > 0:
+            responsePackage = "exists"
+        else:
+            hashedPassword, salt = hash_value_with_salt(package["password"])
+            dbcursor.execute("INSERT INTO Users VALUES(%s, %s, %s, %s);", (package["username"], hashedPassword, salt, pickle.dumps(package["key"]),))
+            dbconnection.commit()
 
-        responsePackage = "success"
+            print("Server> User registered.")
+            responsePackage = "success"
 
-    packageWithHash = hash_package(responsePackage)
-    serializedData = pickle.dumps(packageWithHash)
-    encryptedData = RSA_Methods.encrypt(RSA_Methods.RSA.import_key(package["key"]), serializedData)
-    clientSocket.send(encryptedData)
+        packageWithHash = hash_package(responsePackage)
+        serializedData = pickle.dumps(packageWithHash)
+        encryptedData = RSA_Methods.encrypt(RSA_Methods.RSA.import_key(package["key"]), serializedData)
+        clientSocket.send(encryptedData)
+    except:
+        print("Server> Could not register user due to unspecified error.")
+    finally:
+        clientSocket.close()
 
 def handle_login_request(clientSocket, package):
     pass
@@ -116,9 +123,9 @@ def handle_leavegroup_request(clientSocket, package):
 try:
     dbconnection = mysql.connector.connect(host='localhost', database='IS_Chat', user='root', password='Astera@123456')
     if dbconnection.is_connected():
-        print("Connected to mysql server. ")
+        print("Server> Connected to mysql server. ")
 except Error as e:
-    print("Error while connecting to database server.", e)
+    print("Server> Error while connecting to database server.", e)
 
 server_ip = "localhost"
 server_port = 7000
@@ -127,7 +134,7 @@ try:
     socketObj = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     socketObj.bind((server_ip, server_port))
 except Exception as e:
-    print("Could not initialize server.")
+    print("Server> Could not initialize server.")
     exit(-1)
 
 listen_for_connections()

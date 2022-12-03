@@ -39,26 +39,30 @@ def send_register_message(username, password):
     serializedData = pickle.dumps(packageWithHash)
 
     try:
-        socketObj.send(serializedData)
+        serverSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        serverSocket.connect((server_ip, server_port))
+        serverSocket.send(serializedData)
     except:
-        print("Could not send data to server.")
-        socketObj.close()
+        print("Could not connect or send data to server.")
+        serverSocket.close()
         return "fail"
 
     try:
-        response = socketObj.recv(1024)
+        response = serverSocket.recv(1024)
     except:
         print("Could not receive a response.")
-        socketObj.close()
+        serverSocket.close()
         return "fail"
     
     response = RSA_Methods.decrypt(RSA_Methods.retrieve_private_key("temp"), response)
     response = pickle.loads(response)
 
     if hash_matches(response["package"], response["hash"]):
+        serverSocket.close()
         return response["package"]
     else:
         print("Server response corrupted")
+        serverSocket.close()
         return "fail"
 
 def register_user():
@@ -95,6 +99,8 @@ def register_user():
         if result == "success":
             os.rename("temp_public.pem", username + "_public.pem")
             os.rename("temp_private.pem", username + "_private.pem")
+            print("User successfully registered")
+            os.system("pause")
             return "success"
 
         if result == "exists":
@@ -105,6 +111,7 @@ def register_user():
         if result == "fail":
             os.remove("temp_public.pem")
             os.remove("temp_private.pem")
+            print("Could not register user.")
             os.system("pause")
             return "back"
 
@@ -113,13 +120,10 @@ def register_user():
             os.system("pause")
             return "back"
 
+def login():
+    pass
+
 server_ip = "localhost"
 server_port = 7000
-try:
-    socketObj = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    socketObj.connect((server_ip, server_port))
-except: 
-    print("Could not connect to server.")
-    exit(-1)
 
 register_user()
