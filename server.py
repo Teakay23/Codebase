@@ -25,8 +25,7 @@ def hash_matches(package, hash):
 
     return hash == hasher.hexdigest()
 
-def hash_value_with_salt(value):
-    salt = os.urandom(32)
+def hash_value_with_salt(value, salt = os.urandom(32)):
     value = value.encode() + salt
     hasher = SHA256.new()
     hasher.update(value)
@@ -39,12 +38,15 @@ def listen_for_connections():
     while(1):
         clientSocket, clientAddress = socketObj.accept()
         print("Server> Connected to address: ", clientAddress)
+        # send the server public key to client here
 
         request_handler = threading.Thread(target=listen_for_requests, args=(clientSocket, clientAddress))
         request_handler.start()
 
 def listen_for_requests(clientSocket, clientAddress):
     request = clientSocket.recv(2048)
+
+    # decrypt package with server private key first here
 
     packageWithHash = pickle.loads(request)
     package = packageWithHash["package"]
@@ -88,18 +90,49 @@ def handle_register_request(clientSocket, package):
 
             print("Server> User registered.")
             responsePackage = "success"
-
-        packageWithHash = hash_package(responsePackage)
-        serializedData = pickle.dumps(packageWithHash)
-        encryptedData = RSA_Methods.encrypt(RSA_Methods.RSA.import_key(package["key"]), serializedData)
-        clientSocket.send(encryptedData)
+        
+        try:
+            packageWithHash = hash_package(responsePackage)
+            serializedData = pickle.dumps(packageWithHash)
+            encryptedData = RSA_Methods.encrypt(RSA_Methods.RSA.import_key(package["key"]), serializedData)
+            clientSocket.send(encryptedData)
+        except:
+            print("Server> Could not send response.")
+            dbcursor.execute("DELETE FROM Users WHERE username = %s;", (package["username"],))
+            dbconnection.commit()
+            print("Server> User registration cancelled.")
     except:
-        print("Server> Could not register user due to unspecified error.")
+        print("Server> Server ran into an unspecified error.")
     finally:
         clientSocket.close()
 
 def handle_login_request(clientSocket, package):
-    pass
+    try:
+        dbcursor = dbconnection.cursor()
+        dbcursor.execute("SELECT * FROM Users WHERE username = %s;", (package["username"],))
+        rows = dbcursor.fetchall()
+
+        if len(rows) == 0:
+            responsePackage = "no user"
+        else:
+            checkPassword, temp = hash_value_with_salt(package["password"], bytes.fromhex(rows[0][2]))
+            if rows[0][1] == checkPassword:
+                responsePackage = "logged"
+                print("Server> User logged in.")
+            else:
+                responsePackage = "wrong pass"
+
+        try:
+            packageWithHash = hash_package(responsePackage)
+            serializedData = pickle.dumps(packageWithHash)
+            clientSocket.send(serializedData)
+        except:
+            print("Server> Could not login send response.")
+
+    except Exception as e:
+        print("Server> Could not login user due to unspecified error.\n", e)
+    finally:
+        clientSocket.close()
 
 def handle_listgroup_request(clientSocket, package):
     pass
@@ -129,6 +162,7 @@ except Error as e:
 
 server_ip = "localhost"
 server_port = 7000
+# generate server keys here
 
 try:
     socketObj = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

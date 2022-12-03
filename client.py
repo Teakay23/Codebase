@@ -25,13 +25,19 @@ def hash_matches(package, hash):
 
     return hash == hasher.hexdigest()
 
+def hash_value(value):
+    hasher = SHA256.new()
+    hasher.update(pickle.dumps(value))
+
+    return hasher.hexdigest()
+
 def send_register_message(username, password):
     RSA_Methods.generate_keys("temp")
 
     package = {
                 "header" : "register",
                 "username" : username,
-                "password" : password,
+                "password" : hash_value(password),
                 "key" : RSA_Methods.retrieve_public_key("temp").export_key()
     }
     
@@ -41,6 +47,7 @@ def send_register_message(username, password):
     try:
         serverSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         serverSocket.connect((server_ip, server_port))
+        # get server public key and encrypt serialized data here
         serverSocket.send(serializedData)
     except:
         print("Could not connect or send data to server.")
@@ -48,7 +55,9 @@ def send_register_message(username, password):
         return "fail"
 
     try:
+        serverSocket.settimeout(30.0)
         response = serverSocket.recv(1024)
+        serverSocket.settimeout(None)
     except:
         print("Could not receive a response.")
         serverSocket.close()
@@ -97,18 +106,24 @@ def register_user():
         result = send_register_message(username, password)
 
         if result == "success":
+            if os.path.exists(username + "_public.pem"):
+                os.remove(username + "_public.pem")
             os.rename("temp_public.pem", username + "_public.pem")
+            if os.path.exists(username + "_private.pem"):
+                os.remove(username + "_private.pem")
             os.rename("temp_private.pem", username + "_private.pem")
             print("User successfully registered")
             os.system("pause")
-            return "success"
+            return "back"
 
-        if result == "exists":
+        elif result == "exists":
             print("Username already exists, enter a unique one.")
+            os.remove("temp_public.pem")
+            os.remove("temp_private.pem")
             os.system("pause")
             continue
 
-        if result == "fail":
+        elif result == "fail":
             os.remove("temp_public.pem")
             os.remove("temp_private.pem")
             print("Could not register user.")
@@ -116,12 +131,99 @@ def register_user():
             return "back"
 
         else:
+            os.remove("temp_public.pem")
+            os.remove("temp_private.pem")
             print("Unspecified error occured.")
             os.system("pause")
             return "back"
 
+def send_login_message(username, password):
+    package = {
+        "header" : "login",
+        "username" : username,
+        "password" : hash_value(password),
+    }
+
+    packageWithHash = hash_package(package)
+    serializedData = pickle.dumps(packageWithHash)
+
+    try:
+        serverSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        serverSocket.connect((server_ip, server_port))
+        # get server public key and encrypt serialized data here
+        serverSocket.send(serializedData)
+    except:
+        print("Could not connect or send data to server.")
+        serverSocket.close()
+        return "fail"
+
+    try:
+        serverSocket.settimeout(500.0)
+        response = serverSocket.recv(1024)
+        serverSocket.settimeout(None)
+    except:
+        print("Could not receive a response.")
+        serverSocket.close()
+        return "fail"
+
+    response = pickle.loads(response)
+
+    if hash_matches(response["package"], response["hash"]):
+        serverSocket.close()
+        return response["package"]
+    else:
+        print("Server response corrupted")
+        serverSocket.close()
+        return "fail"
+    
+
 def login():
-    pass
+    while(1):
+        os.system('cls')
+        print("Login an account: (Enter \"exit\" to go back)")
+
+        username = input("Username: ")
+        if username == "exit":
+            return "back"
+        if len(username) < 6 or len(username) > 20:
+            print("Username must contain at least 6 characters and at most 20 characters.")
+            os.system("pause")
+            continue
+
+        password = input("Password: ")
+        if password == "exit":
+            return "back"
+        if len(password) < 6 or len(password) > 20:
+            print("Password must contain at least 6 characters and at most 20 characters.")
+            os.system("pause")
+            continue
+
+        result = send_login_message(username, password)
+
+        if result == "fail":
+            print("Failed due to server error.")
+            os.system("pause")
+            return "back"
+
+        elif result == "no user":
+            print("User does not exist.")
+            os.system("pause")
+            continue
+
+        elif result == "wrong pass":
+            print("Incorrect password for this user.")
+            os.system("pause")
+            continue
+
+        elif result == "logged":
+            print("Successful login.")
+            os.system("pause")
+            return "logged"
+
+        else:
+            print("Unspecified error occured.")
+            os.system("pause")
+            return "back"  
 
 server_ip = "localhost"
 server_port = 7000
