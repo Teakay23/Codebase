@@ -32,6 +32,12 @@ def hash_value_with_salt(value, salt = os.urandom(32)):
 
     return hasher.hexdigest(), salt.hex()
 
+def send_server_public_key(clientSocket):
+    package = RSA_Methods.retrieve_public_key("server").export_key()
+    packageWithHash = hash_package(package)
+    serializedData = pickle.dumps(packageWithHash)
+    clientSocket.send(serializedData)
+
 def listen_for_connections():
     socketObj.listen()
 
@@ -39,6 +45,11 @@ def listen_for_connections():
         clientSocket, clientAddress = socketObj.accept()
         print("Server> Connected to address: ", clientAddress)
         # send the server public key to client here
+        try:
+            send_server_public_key(clientSocket)
+        except:
+            print("Server> Could not send server public key to client: ", clientAddress)
+            continue
 
         request_handler = threading.Thread(target=listen_for_requests, args=(clientSocket, clientAddress))
         request_handler.start()
@@ -47,7 +58,7 @@ def listen_for_requests(clientSocket, clientAddress):
     request = clientSocket.recv(2048)
 
     # decrypt package with server private key first here
-
+    request = RSA_Methods.decrypt_with_RSA_AES(RSA_Methods.retrieve_private_key("server"), request)
     packageWithHash = pickle.loads(request)
     package = packageWithHash["package"]
     
@@ -85,7 +96,7 @@ def handle_register_request(clientSocket, package):
             responsePackage = "exists"
         else:
             hashedPassword, salt = hash_value_with_salt(package["password"])
-            dbcursor.execute("INSERT INTO Users VALUES(%s, %s, %s, %s);", (package["username"], hashedPassword, salt, pickle.dumps(package["key"]),))
+            dbcursor.execute("INSERT INTO Users VALUES(%s, %s, %s, %s);", (package["username"], hashedPassword, salt, package["key"],))
             dbconnection.commit()
 
             print("Server> User registered.")
@@ -128,7 +139,7 @@ def handle_login_request(clientSocket, package):
             encryptedData = RSA_Methods.encrypt(RSA_Methods.RSA.import_key(package["key"]), serializedData)
             clientSocket.send(encryptedData)
         except:
-            print("Server> Could not login send response.")
+            print("Server> Could not send response.")
 
     except Exception as e:
         print("Server> Could not login user due to unspecified error.\n", e)
@@ -136,7 +147,40 @@ def handle_login_request(clientSocket, package):
         clientSocket.close()
 
 def handle_listgroup_request(clientSocket, package):
-    pass
+    try:
+        dbcursor = dbconnection.cursor()
+        dbcursor.execute("SELECT * FROM Users WHERE username = %s", (package["username"],))
+        rows = dbcursor.fetchall()
+
+        if len(rows) == 0:
+            raise Exception
+        else:
+            checkPassword, temp = hash_value_with_salt(package["password"], bytes.fromhex(rows[0][2]))
+            clientPublicKey = rows[0][3]
+            if rows[0][1] != checkPassword:
+                raise Exception
+            else:
+                dbcursor.execute("SELECT Groups.group_id, Groups.group_name FROM Users INNER JOIN User_Group ON Users.username = User_Group.username INNER JOIN `Groups` ON User_Group.group_id = Groups.group_id WHERE User_Group.username = %s;", (package["username"],))
+                rows1 = dbcursor.fetchall()
+                groupList = list()
+
+                for row in rows1:
+                    groupList.append((row[0], row[1]))
+
+                responsePackage = groupList
+
+        try:
+            packageWithHash = hash_package(responsePackage)
+            serializedData = pickle.dumps(packageWithHash)
+            encryptedData = RSA_Methods.encrypt_with_RSA_AES(RSA_Methods.RSA.import_key(clientPublicKey), serializedData)
+            clientSocket.send(encryptedData)
+        except Exception as e:
+            print("Server> Could not send response.")
+
+    except Exception as e:
+        print("Server> Could not return group list due to unspecified error.\n", e)
+    finally:
+        clientSocket.close()
 
 def handle_creategroup_request(clientSocket, package):
     pass

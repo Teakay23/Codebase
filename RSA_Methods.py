@@ -1,5 +1,7 @@
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_OAEP as enc
+from Crypto.Cipher import AES
+from Crypto.Random import get_random_bytes
 import pickle
 import os
 
@@ -24,6 +26,31 @@ def decrypt(key, data):
     decrypted_data = decryption_scheme.decrypt(data)
 
     return decrypted_data
+
+def encrypt_with_RSA_AES(key, data):
+    session_key = get_random_bytes(16)
+    encrypted_session_key = encrypt(key, session_key)
+
+    aes_encrypt = AES.new(session_key, AES.MODE_EAX)
+    cipher_text, tag = aes_encrypt.encrypt_and_digest(data)
+
+    encrypted_data = {
+        "session_key" : encrypted_session_key,
+        "data" : cipher_text,
+        "nonce" : aes_encrypt.nonce,
+        "tag" : tag
+    }
+
+    return pickle.dumps(encrypted_data)
+
+def decrypt_with_RSA_AES(key, data):
+    encrypted_data = pickle.loads(data)
+    
+    session_key = decrypt(key, encrypted_data["session_key"])
+    aes_decrypt = AES.new(session_key, AES.MODE_EAX, encrypted_data["nonce"])
+    plain_data = aes_decrypt.decrypt_and_verify(encrypted_data["data"], encrypted_data["tag"])
+
+    return plain_data
 
 def generate_keys(filePrefix):
     key = RSA.generate(2048)

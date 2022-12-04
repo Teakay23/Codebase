@@ -31,6 +31,17 @@ def hash_value(value):
 
     return hasher.hexdigest()
 
+def fetch_server_key_and_encrypt(serverSocket, data):
+    serverSocket.settimeout(30.0)
+    serverKeyResponse = serverSocket.recv(1024)
+    serverSocket.settimeout(None)
+
+    serverKeyResponse = pickle.loads(serverKeyResponse)
+    if not hash_matches(serverKeyResponse["package"], serverKeyResponse["hash"]):
+        raise Exception
+    key = RSA_Methods.RSA.import_key(serverKeyResponse["package"])
+    return RSA_Methods.encrypt_with_RSA_AES(key, data)
+
 def send_register_message(username, password):
     RSA_Methods.generate_keys("temp")
 
@@ -48,14 +59,15 @@ def send_register_message(username, password):
         serverSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         serverSocket.connect((server_ip, server_port))
         # get server public key and encrypt serialized data here
-        serverSocket.send(serializedData)
-    except:
-        print("Could not connect or send data to server.")
+        encrypted_data = fetch_server_key_and_encrypt(serverSocket, serializedData)
+        serverSocket.send(encrypted_data)
+    except Exception as e:
+        print("Could not communicate with server.", e)
         serverSocket.close()
         return "fail"
 
     try:
-        serverSocket.settimeout(30.0)
+        serverSocket.settimeout(500.0)
         response = serverSocket.recv(1024)
         serverSocket.settimeout(None)
     except:
@@ -154,7 +166,8 @@ def send_login_message(username, password):
         serverSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         serverSocket.connect((server_ip, server_port))
         # get server public key and encrypt serialized data here
-        serverSocket.send(serializedData)
+        encrypted_data = fetch_server_key_and_encrypt(serverSocket, serializedData)
+        serverSocket.send(encrypted_data)
     except:
         print("Could not connect or send data to server.")
         serverSocket.close()
@@ -229,7 +242,64 @@ def login():
             os.system("pause")
             return "back"  
 
+def send_listgroup_message(username, password):
+    os.system('cls')
+
+    package = {
+        "header" : "listgroup",
+        "username" : username,
+        "password" : hash_value(password)
+    }
+
+    packageWithHash = hash_package(package)
+    serializedData = pickle.dumps(packageWithHash)
+
+    try:
+        serverSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        serverSocket.connect((server_ip, server_port))
+        # get server public key and encrypt serialized data here
+        encrypted_data = fetch_server_key_and_encrypt(serverSocket, serializedData)
+        serverSocket.send(encrypted_data)
+    except:
+        print("Could not connect or send data to server.")
+        serverSocket.close()
+        return "fail"
+
+    try:
+        serverSocket.settimeout(500.0)
+        response = serverSocket.recv(1024)
+        serverSocket.settimeout(None)
+    except:
+        print("Could not receive a response.")
+        serverSocket.close()
+        return "fail"
+
+    response = RSA_Methods.decrypt_with_RSA_AES(RSA_Methods.retrieve_private_key(username), response)
+    response = pickle.loads(response)
+
+    if hash_matches(response["package"], response["hash"]):
+        serverSocket.close()
+        return response["package"]
+    else:
+        print("Server response corrupted.")
+        serverSocket.close()
+        return "fail"
+        
+
+def list_groups(username, password): # send the username and password of the currently logged in user.
+    result = send_listgroup_message(username, password)
+
+    if result == "fail":
+        print("Could not list user groups.")
+        os.system("pause")
+        return "back"
+
+    print(username, "'s Group List:", sep="")
+    for sNo, group in enumerate(result):
+        print(sNo+1, ". ", group[1], sep="")
+
 server_ip = "localhost"
 server_port = 7000
 
-login()
+register_user()
+list_groups("Umer123", "MissMakran1")
