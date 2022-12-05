@@ -129,8 +129,8 @@ def register_user():
 
         if username == "exit":
             return "back"
-        if len(username) < 6 or len(username) > 20:
-            print("Username must contain at least 6 characters and at most 20 characters.")
+        if len(username) < 6 or len(username) > 20 or " " in username:
+            print("Username must contain at least 6 characters and at most 20 characters. And it must not have spaces.")
             os.system("pause")
             continue
 
@@ -237,8 +237,8 @@ def login():
         username = input("Username: ")
         if username == "exit":
             return "back"
-        if len(username) < 6 or len(username) > 20:
-            print("Username must contain at least 6 characters and at most 20 characters.")
+        if len(username) < 6 or len(username) > 20 or " " in username:
+            print("Username must contain at least 6 characters and at most 20 characters. And it must not have spaces.")
             os.system("pause")
             continue
 
@@ -270,7 +270,7 @@ def login():
         elif result == "logged":
             print("Successful login.")
             os.system("pause")
-            return "logged"
+            return username, password
 
         else:
             print("Unspecified error occured.")
@@ -335,7 +335,8 @@ def list_groups(username, password): # send the username and password of the cur
     print(username, "'s Group List:", sep="")
     for sNo, group in enumerate(result):
         print(sNo+1, ". ", group[1], sep="")
-    return "listed"
+
+    return result # contains group_id and group name
 
 
 def send_creategroup_message(username, password, groupName):
@@ -373,10 +374,64 @@ def create_group(username, password):
             os.system("pause")
             return "back"
 
+def send_addusers_message(username, password, group_id, userList):
+    package = {
+        "header" : "adduserstogroup",
+        "username" : username,
+        "password" : hash_value(password),
+        "group_id" : group_id,
+        "userList" : userList
+    }
+
+    return send_package_and_retrieve_response(package, username)
+
+def add_users_to_group(username, password, group_id):
+    while(1):
+        os.system("cls")
+        print("Enter Usernames of the user you want to add: (Enter \"done\" when list is complete or \"exit\" to go back.)")
+
+        userList = []
+        while(1):
+            user = input()
+
+            if user == "done":
+                break
+            if user == "exit":
+                return "back"
+            if len(user) < 6 or len(user) > 20:
+                print("Username should be between 6 and 20 characters.\n")
+                continue
+            userList.append(user)
+
+        if len(userList) == 0:
+            return "back"
+
+        results = send_addusers_message(username, password, group_id, userList)
+
+        if results == "no group":
+            print("The selected group does not exist.")
+            os.system("pause")
+            return "back"
+
+        if results == "not admin":
+            print("You are not authorized to add users to this group.")
+            os.system("pause")
+            return "back"
+
+        print("\n")
+        for result in results:
+            print(result)
+        os.system("pause")
+        return "back"
+
 server_ip = "localhost"
 server_port = 7000
 
-#register_user()
+register_user()
+u, p = login()
 #list_groups("Umer123", "MissMakran1")
-create_group("Umer123", "MissMakran1")
-list_groups("Umer123", "MissMakran1")
+add_users_to_group(u, p, 1)
+
+u, p = login()
+list_groups(u, p)
+add_users_to_group(u, p, 1)
