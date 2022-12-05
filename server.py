@@ -183,7 +183,48 @@ def handle_listgroup_request(clientSocket, package):
         clientSocket.close()
 
 def handle_creategroup_request(clientSocket, package):
-    pass
+    try:
+        dbcursor = dbconnection.cursor()
+        dbcursor.execute("SELECT * FROM Users WHERE username = %s;", (package["username"],))
+        rows = dbcursor.fetchall()
+
+        if len(rows) == 0:
+            raise Exception
+        else:
+            checkPassword, temp = hash_value_with_salt(package["password"], bytes.fromhex(rows[0][2]))
+            clientPublicKey = rows[0][3]
+            if rows[0][1] != checkPassword:
+                raise Exception
+            else:
+                dbcursor = dbconnection.cursor()
+                dbcursor.execute("SELECT max(group_id) FROM `Groups`;")
+                groupId = dbcursor.fetchall()[0][0]
+                if groupId == None:
+                    groupId = 1
+                else:
+                    groupId += 1
+                dbcursor.execute("INSERT INTO `Groups` VALUES(%s, %s, %s);", (groupId, package["groupname"], package["username"],))
+
+                while(len(rows) > 0):
+                    groupKeyHex = RSA_Methods.get_random_bytes(16).hex()
+                    dbcursor.execute("SELECT `key` FROM key_storage WHERE `key` = %s;", (groupKeyHex,))
+                    rows = dbcursor.fetchall()
+
+                dbcursor.execute("INSERT INTO key_storage VALUES(%s, %s);", (groupId, groupKeyHex,))
+                dbcursor.execute("INSERT INTO User_Group VALUES(%s, %s);", (package["username"], groupId,))
+                dbconnection.commit()
+                responsePackage = "success"
+        try:
+            packageWithHash = hash_package(responsePackage)
+            serializedData = pickle.dumps(packageWithHash)
+            encryptedData = RSA_Methods.encrypt_with_RSA_AES(RSA_Methods.RSA.import_key(clientPublicKey), serializedData)
+            clientSocket.send(encryptedData)
+        except Exception as e:
+            print("Server> Could not send response.")
+    except Exception as e:
+        print("Server> Unspecified error occurred.\n", e)
+    finally:
+        clientSocket.close()
 
 def handle_entergroup_request(clientSocket, package):
     pass

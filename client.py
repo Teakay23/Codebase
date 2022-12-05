@@ -33,7 +33,7 @@ def hash_value(value):
 
 def fetch_server_key_and_encrypt(serverSocket, data):
     serverSocket.settimeout(30.0)
-    serverKeyResponse = serverSocket.recv(1024)
+    serverKeyResponse = serverSocket.recv(2048)
     serverSocket.settimeout(None)
 
     serverKeyResponse = pickle.loads(serverKeyResponse)
@@ -41,6 +41,41 @@ def fetch_server_key_and_encrypt(serverSocket, data):
         raise Exception
     key = RSA_Methods.RSA.import_key(serverKeyResponse["package"])
     return RSA_Methods.encrypt_with_RSA_AES(key, data)
+
+def send_package_and_retrieve_response(package, privateKeyFilePrefix):
+    packageWithHash = hash_package(package)
+    serializedData = pickle.dumps(packageWithHash)
+
+    try:
+        serverSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        serverSocket.connect((server_ip, server_port))
+        # get server public key and encrypt serialized data here
+        encrypted_data = fetch_server_key_and_encrypt(serverSocket, serializedData)
+        serverSocket.send(encrypted_data)
+    except Exception as e:
+        print("Could not communicate with server.", e)
+        serverSocket.close()
+        return "fail"
+
+    try:
+        serverSocket.settimeout(500.0)
+        response = serverSocket.recv(2048)
+        serverSocket.settimeout(None)
+    except:
+        print("Could not receive a response.")
+        serverSocket.close()
+        return "fail"
+    
+    response = RSA_Methods.decrypt_with_RSA_AES(RSA_Methods.retrieve_private_key(privateKeyFilePrefix), response)
+    response = pickle.loads(response)
+
+    if hash_matches(response["package"], response["hash"]):
+        serverSocket.close()
+        return response["package"]
+    else:
+        print("Server response corrupted")
+        serverSocket.close()
+        return "fail"
 
 def send_register_message(username, password):
     RSA_Methods.generate_keys("temp")
@@ -68,7 +103,7 @@ def send_register_message(username, password):
 
     try:
         serverSocket.settimeout(500.0)
-        response = serverSocket.recv(1024)
+        response = serverSocket.recv(2048)
         serverSocket.settimeout(None)
     except:
         print("Could not receive a response.")
@@ -175,7 +210,7 @@ def send_login_message(username, password):
 
     try:
         serverSocket.settimeout(500.0)
-        response = serverSocket.recv(1024)
+        response = serverSocket.recv(2048)
         serverSocket.settimeout(None)
     except:
         print("Could not receive a response.")
@@ -243,8 +278,6 @@ def login():
             return "back"  
 
 def send_listgroup_message(username, password):
-    os.system('cls')
-
     package = {
         "header" : "listgroup",
         "username" : username,
@@ -267,7 +300,7 @@ def send_listgroup_message(username, password):
 
     try:
         serverSocket.settimeout(500.0)
-        response = serverSocket.recv(1024)
+        response = serverSocket.recv(2048)
         serverSocket.settimeout(None)
     except:
         print("Could not receive a response.")
@@ -285,8 +318,8 @@ def send_listgroup_message(username, password):
         serverSocket.close()
         return "fail"
         
-
 def list_groups(username, password): # send the username and password of the currently logged in user.
+    os.system('cls')
     result = send_listgroup_message(username, password)
 
     if result == "fail":
@@ -294,12 +327,56 @@ def list_groups(username, password): # send the username and password of the cur
         os.system("pause")
         return "back"
 
+    if len(result) == 0:
+        print("You are not a part of any groups.")
+        os.system("pause")
+        return "back"
+
     print(username, "'s Group List:", sep="")
     for sNo, group in enumerate(result):
         print(sNo+1, ". ", group[1], sep="")
+    return "listed"
+
+
+def send_creategroup_message(username, password, groupName):
+    package = {
+            "header" : "creategroup",
+            "username" : username,
+            "password" : hash_value(password),
+            "groupname" : groupName
+        }
+
+    return send_package_and_retrieve_response(package, username) 
+
+def create_group(username, password):
+    while(1):
+        os.system('cls')
+        print("Create a group: (Enter \"exit\" to go back)")
+
+        groupName = input("Group Name: ")
+        if groupName == "exit":
+            return "back"
+        if len(groupName) < 6 or len(groupName) > 45:
+            print("Group Name must contain at least 6 characters and at most 45 characters.")
+            os.system("pause")
+            continue
+
+        result = send_creategroup_message(username, password, groupName)
+
+        if result == "fail":
+            print("Could not create group.")
+            os.system("pause")
+            return "back"
+
+        if result == "success":
+            print("Group created successfully. You can now add users to this group.")
+            os.system("pause")
+            return "back"
 
 server_ip = "localhost"
 server_port = 7000
 
-register_user()
+#register_user()
+#list_groups("Umer123", "MissMakran1")
+create_group("Umer123", "MissMakran1")
 list_groups("Umer123", "MissMakran1")
