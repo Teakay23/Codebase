@@ -287,7 +287,56 @@ def handle_adduserstogroup_request(clientSocket, package):
         clientSocket.close()    
 
 def handle_leavegroup_request(clientSocket, package):
-    pass
+    try:
+        dbcursor = dbconnection.cursor()
+        dbcursor.execute("SELECT * FROM Users WHERE username = %s;", (package["username"],))
+        rows = dbcursor.fetchall()
+
+        if len(rows) == 0:
+            raise Exception
+        else:
+            checkPassword, temp = hash_value_with_salt(package["password"], bytes.fromhex(rows[0][2]))
+            clientPublicKey = rows[0][3]
+            if rows[0][1] != checkPassword:
+                raise Exception
+            else:
+                dbcursor.execute("SELECT admin FROM `Groups` WHERE group_id = %s;", (package["group_id"],))
+                rows = dbcursor.fetchall()
+
+                if len(rows) == 0:
+                    responsePackage = "no group"
+                elif rows[0][0] != package["username"] and package["username"] != package["removeUser"]:
+                    responsePackage = "not admin"
+                elif rows[0][0] == package["username"] and package["username"] == package["removeUser"]:
+                    responsePackage = "admin group"
+                else:
+                    dbcursor.execute("SELECT * FROM Users WHERE username = %s;", (package["removeUser"],))
+                    rows = dbcursor.fetchall()
+
+                    if len(rows) == 0:
+                        responsePackage = package["removeUser"] + " does not exist."
+                    else:
+                        dbcursor.execute("SELECT * FROM User_Group WHERE username = %s AND group_id = %s;", (package["removeUser"], package["group_id"],))
+                        rows = dbcursor.fetchall()
+
+                        if len(rows) == 0:
+                            responsePackage = package["removeUser"] + " is not in the group."
+                        else:
+                            dbcursor.execute("DELETE FROM User_Group WHERE username = %s and group_id = %s;", (package["removeUser"], package["group_id"]))
+                            responsePackage = package["removeUser"] + " removed from the group."
+                            dbconnection.commit()
+        try:
+            packageWithHash = hash_package(responsePackage)
+            serializedData = pickle.dumps(packageWithHash)
+            encryptedData = RSA_Methods.encrypt_with_RSA_AES(RSA_Methods.RSA.import_key(clientPublicKey), serializedData)
+            clientSocket.send(encryptedData)
+        except Exception as e:
+            print("Server> Could not send response.")
+
+    except Exception as e:
+        print("Server> Unspecified error occurred.\n", e)
+    finally:
+        clientSocket.close()  
 
 try:
     dbconnection = mysql.connector.connect(host='localhost', database='IS_Chat', user='root', password='Astera@123456')

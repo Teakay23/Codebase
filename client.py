@@ -424,14 +424,61 @@ def add_users_to_group(username, password, group_id):
         os.system("pause")
         return "back"
 
+def send_leavegroup_message(username, password, group_id, removeUser):
+    package = {
+        "header" : "leavegroup",
+        "username" : username,
+        "password" : hash_value(password),
+        "group_id" : group_id,
+        "removeUser" : removeUser
+    }
+
+    return send_package_and_retrieve_response(package, username)
+
+def remove_from_group(username, password, group_id):
+    while(1):
+        os.system("cls")
+        print("Enter the username you want to remove from the group: (Enter \"exit\" to go back.)")
+
+        removeUser = input("Username: ")
+        if removeUser == "exit":
+            return "back"
+        if len(removeUser) < 6 or len(removeUser) > 20 or " " in removeUser:
+            print("Username must contain at least 6 characters and at most 20 characters. And it must not have spaces.")
+            os.system("pause")
+            continue
+
+        result = send_leavegroup_message(username, password, group_id, removeUser)
+
+        if result == "no group":
+            print("The selected group does not exist.")
+            os.system("pause")
+            return "back"
+
+        if result == "not admin":
+            print("You are not authorized to remove users from this group.")
+            os.system("pause")
+            return "back"
+
+        if result == "admin group":
+            print("Admin cannot leave the group.")
+            os.system("pause")
+            return "back"
+
+        print(result)
+        os.system("pause")
+        return "back"
+
 server_ip = "localhost"
 server_port = 7000
 
-register_user()
-u, p = login()
-#list_groups("Umer123", "MissMakran1")
-add_users_to_group(u, p, 1)
+# register_user()
+# u, p = login()
+# #list_groups("Umer123", "MissMakran1")
+# add_users_to_group(u, p, 1)
 
-u, p = login()
-list_groups(u, p)
-add_users_to_group(u, p, 1)
+# u, p = login()
+# list_groups(u, p)
+# add_users_to_group(u, p, 1)
+remove_from_group("Umer123", "MissMakran1", 1)
+list_groups("Umer123", "MissMakran1")
