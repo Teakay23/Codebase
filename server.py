@@ -84,6 +84,8 @@ def listen_for_requests(clientSocket, clientAddress):
         handle_adduserstogroup_request(clientSocket, package)
     elif header == "leavegroup":
         handle_leavegroup_request(clientSocket, package)
+    elif header == "deletegroup":
+        handle_deletegroup_request(clientSocket, package)
 
 # main functionality
 def handle_register_request(clientSocket, package):
@@ -337,6 +339,45 @@ def handle_leavegroup_request(clientSocket, package):
         print("Server> Unspecified error occurred.\n", e)
     finally:
         clientSocket.close()  
+
+def handle_deletegroup_request(clientSocket, package):
+    try:
+        dbcursor = dbconnection.cursor()
+        dbcursor.execute("SELECT * FROM Users WHERE username = %s;", (package["username"],))
+        rows = dbcursor.fetchall()
+
+        if len(rows) == 0:
+            raise Exception
+        else:
+            checkPassword, temp = hash_value_with_salt(package["password"], bytes.fromhex(rows[0][2]))
+            clientPublicKey = rows[0][3]
+            if rows[0][1] != checkPassword:
+                raise Exception
+            else:
+                dbcursor.execute("SELECT admin, group_name FROM `Groups` WHERE group_id = %s;", (package["group_id"],))
+                rows = dbcursor.fetchall()
+
+                if len(rows) == 0:
+                    responsePackage = "no group"
+                elif rows[0][0] != package["username"]:
+                    responsePackage = "not admin"
+                else:
+                    dbcursor.execute("DELETE FROM `Groups` WHERE group_id = %s;", (package["group_id"],))
+                    responsePackage = "Group: " + rows[0][1] + " has been deleted."
+                    dbconnection.commit()
+        try:
+            packageWithHash = hash_package(responsePackage)
+            serializedData = pickle.dumps(packageWithHash)
+            encryptedData = RSA_Methods.encrypt_with_RSA_AES(RSA_Methods.RSA.import_key(clientPublicKey), serializedData)
+            clientSocket.send(encryptedData)
+        except Exception as e:
+            print("Server> Could not send response.")
+            
+    except Exception as e:
+        print("Server> Unspecified error occurred.\n", e)
+    finally:
+        clientSocket.close()  
+
 
 try:
     dbconnection = mysql.connector.connect(host='localhost', database='IS_Chat', user='root', password='Astera@123456')

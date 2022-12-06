@@ -469,6 +469,34 @@ def remove_from_group(username, password, group_id):
         os.system("pause")
         return "back"
 
+def send_deletegroup_message(username, password, group_id):
+    package = {
+        "header" : "deletegroup",
+        "username" : username,
+        "password" : hash_value(password),
+        "group_id" : group_id
+    }
+
+    return send_package_and_retrieve_response(package, username)
+
+def delete_group(username, password, group_id):
+    
+    result = send_deletegroup_message(username, password, group_id)
+
+    if result == "no group":
+        print("This group does not exist.")
+        os.system("pause")
+        return "back"
+
+    if result == "not admin":
+        print("You are not authorized to delete this group.")
+        os.system("pause")
+        return "back"
+
+    print(result)
+    os.system("pause")
+    return "back"
+
 server_ip = "localhost"
 server_port = 7000
 
@@ -480,5 +508,6 @@ server_port = 7000
 # u, p = login()
 # list_groups(u, p)
 # add_users_to_group(u, p, 1)
-remove_from_group("Umer123", "MissMakran1", 1)
-list_groups("Umer123", "MissMakran1")
+# remove_from_group("Umer123", "MissMakran1", 1)
+# list_groups("Umer123", "MissMakran1")
+delete_group("Umer123", "MissMakran1", 1)
