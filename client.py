@@ -651,90 +651,106 @@ def mainScreen():
     loggedUserPassword = None
 
     while(1):
-        os.system("cls")
-        print("Welcome to Radianite Chat App")
-        print("1. Login\n2. Register User\n3. Exit\n")
-        choice = int(input("Enter a number: "))
+        try:
+            os.system("cls")
+            print("Welcome to Radianite Chat App")
+            print("1. Login\n2. Register User\n3. Exit\n")
+            choice = input("Enter a number: ")
 
-        if choice == 1:
-            result = login()
-            if result != "back":
-                loggedUser, loggedUserPassword = result
-                loggedInScreen(loggedUser, loggedUserPassword)
-        elif choice == 2:
-            register_user()
-        elif choice == 3:
-            exit(0)
-        else:
-            print("Invalid Input. Try again.")
-            os.system("pause")
+            if choice == "1":
+                result = login()
+                if result != "back":
+                    loggedUser, loggedUserPassword = result
+                    loggedInScreen(loggedUser, loggedUserPassword)
+            elif choice == "2":
+                register_user()
+            elif choice == "3":
+                exit(0)
+            else:
+                print("Invalid Input. Try again.")
+                os.system("pause")
+        except Exception as e:
+            print("Unexpected error occured. This may be due to communication error with the server.")
+            continue
 
 def loggedInScreen(loggedUser, loggedUserPassword):
     while(1):
-        os.system("cls")
-        print("Welcome", loggedUser)
-        print("1. Create Group\n2. List Groups\n3. Log out\n")
-        choice = int(input("Enter a number: "))
+        try:
+            os.system("cls")
+            print("Welcome", loggedUser)
+            print("1. Create Group\n2. List Groups\n3. Log out\n")
+            choice = input("Enter a number: ")
 
-        if choice == 1:
-            create_group(loggedUser, loggedUserPassword)
-        elif choice == 2:
-            groupsScreen(loggedUser, loggedUserPassword)
-        elif choice == 3:
-            return
-        else:
-            print("Invalid Input. Try again.")
-            os.system("pause")
+            if choice == "1":
+                create_group(loggedUser, loggedUserPassword)
+            elif choice == "2":
+                groupsScreen(loggedUser, loggedUserPassword)
+            elif choice == "3":
+                return
+            else:
+                print("Invalid Input. Try again.")
+                os.system("pause")
+        except Exception as e:
+            print("Unexpected error occured. This may be due to communication error with the server.")
+            continue
 
 def groupsScreen(loggedUser, loggedUserPassword):
     while(1):
-        os.system("cls")
-        selectFlag = False
-        result = list_groups(loggedUser, loggedUserPassword)
+        try:
+            os.system("cls")
+            selectFlag = False
+            result = list_groups(loggedUser, loggedUserPassword)
 
-        if result == "back":
-            return
-        print((len(result)+1), ". Go back\n", sep="")
-        choice = int(input("Enter a number to select the group or go back: "))
+            if result == "back":
+                return
+            print((len(result)+1), ". Go back\n", sep="")
+            choice = input("Enter a number to select the group or go back: ")
 
-        if choice == len(result)+1:
-            return
+            if choice == str(len(result)+1):
+                return
 
-        for sNo, group in enumerate(result):
-            if choice == sNo+1:
-                selectGroupScreen(loggedUser, loggedUserPassword, group[0], group[1])
-                selectFlag = True
-                break
-        
-        if selectFlag == False:
-            print("Invalid Input. Try again.")
-            os.system("pause")
+            for sNo, group in enumerate(result):
+                if choice == str(sNo+1):
+                    selectGroupScreen(loggedUser, loggedUserPassword, group[0], group[1])
+                    selectFlag = True
+                    break
+            
+            if selectFlag == False:
+                print("Invalid Input. Try again.")
+                os.system("pause")
+        except Exception as e:
+            print("Unexpected error occured. This may be due to communication error with the server.")
+            continue
 
 def selectGroupScreen(loggedUser, loggedUserPassword, group_id, group_name):
     while(1):
-        os.system("cls")
-        print("Selected Group:", group_name)
-        print("1. Enter Group Chat\n2. Add Users\n3. Remove a User\n4. Leave Group\n5. Delete Group\n6. Go back")
-
-        choice = int(input("Enter a number: "))
-
-        if choice == 1:
+        try:
             os.system("cls")
-            enter_group(loggedUser, loggedUserPassword, group_id)
-        elif choice == 2:
-            add_users_to_group(loggedUser, loggedUserPassword, group_id)
-        elif choice == 3:
-            remove_from_group(loggedUser, loggedUserPassword, group_id)
-        elif choice == 4:
-            remove_from_group(loggedUser, loggedUserPassword, group_id, True)
-            return
-        elif choice == 5:
-            delete_group(loggedUser, loggedUserPassword, group_id)
-            return
-        elif choice == 6:
-            return
-        else:
-            print("Invalid Input. Try again.")
-            os.system("pause")
+            print("Selected Group:", group_name)
+            print("1. Enter Group Chat\n2. Add Users\n3. Remove a User\n4. Leave Group\n5. Delete Group\n6. Go back")
+
+            choice = input("Enter a number: ")
+
+            if choice == "1":
+                os.system("cls")
+                enter_group(loggedUser, loggedUserPassword, group_id)
+            elif choice == "2":
+                add_users_to_group(loggedUser, loggedUserPassword, group_id)
+            elif choice == "3":
+                remove_from_group(loggedUser, loggedUserPassword, group_id)
+            elif choice == "4":
+                remove_from_group(loggedUser, loggedUserPassword, group_id, True)
+                return
+            elif choice == "5":
+                delete_group(loggedUser, loggedUserPassword, group_id)
+                return
+            elif choice == "6":
+                return
+            else:
+                print("Invalid Input. Try again.")
+                os.system("pause")
+        except Exception as e:
+            print("Unexpected error occured. This may be due to communication error with the server.")
+            continue
 
 mainScreen()
