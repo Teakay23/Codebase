@@ -8,6 +8,7 @@ import pwinput
 from Crypto.Hash import SHA256
 from datetime import datetime
 
+
 def has_numbers(inputString):
     return bool(re.search(r'\d', inputString))
 
@@ -586,7 +587,7 @@ def listen_for_messages(serverSocket, symmetric_key):
 
         response = RSA_Methods.decrypt_AES(symmetric_key, response)
         if hash_matches(response["package"], response["hash"]):
-            print(format_message(symmetric_key, response["package"]))
+            print("\n" + format_message(symmetric_key, response["package"]) + "\n")
         else:
             print("Incoming message was corrupted.")
 
@@ -605,7 +606,7 @@ def send_sendmessage_message(username, password, group_id, groupKeyHex, message)
 
 def send_message(username, password, group_id, groupKeyHex):
     while(1):
-        message = input("Enter a message: (Enter \"\\exit\" to go back) ")
+        message = input("Enter a message: (Enter \"\\exit\" to go back)\n")
 
         if len(message) < 1 and len(message) > 100:
             print("Message length has to be between 1 and 100 characters.")
