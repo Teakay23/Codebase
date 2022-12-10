@@ -55,7 +55,11 @@ def listen_for_connections():
         request_handler.start()
 
 def listen_for_requests(clientSocket, clientAddress):
-    request = clientSocket.recv(2048)
+    try:
+        request = clientSocket.recv(2048)
+    except:
+        print("Server> A connection closed.")
+        return
 
     # decrypt package with server private key first here
     request = RSA_Methods.decrypt_with_RSA_AES(RSA_Methods.retrieve_private_key("server"), request)
@@ -86,6 +90,8 @@ def listen_for_requests(clientSocket, clientAddress):
         handle_leavegroup_request(clientSocket, package)
     elif header == "deletegroup":
         handle_deletegroup_request(clientSocket, package)
+    elif header == "getusers":
+        handle_getusers_request(clientSocket, package)
 
 # main functionality
 def handle_register_request(clientSocket, package):
@@ -467,6 +473,46 @@ def handle_deletegroup_request(clientSocket, package):
         print("Server> Unspecified error occurred.\n", e)
     finally:
         clientSocket.close()  
+
+def handle_getusers_request(clientSocket, package):
+    try:
+        dbcursor = dbconnection.cursor()
+        dbcursor.execute("SELECT * FROM Users WHERE username = %s;", (package["username"],))
+        rows = dbcursor.fetchall()
+
+        if len(rows) == 0:
+            raise Exception
+        else:
+            checkPassword, temp = hash_value_with_salt(package["password"], bytes.fromhex(rows[0][2]))
+            clientPublicKey = rows[0][3]
+            if rows[0][1] != checkPassword:
+                raise Exception
+            else:
+                dbcursor.execute("SELECT admin FROM `Groups` WHERE group_id = %s;", (package["group_id"],))
+                rows = dbcursor.fetchall()
+
+                if len(rows) == 0:
+                    responsePackage = "no group"
+                else:
+                    dbcursor.execute("SELECT * FROM User_Group WHERE username = %s AND group_id = %s;", (package["username"], package["group_id"],))
+                    rows = dbcursor.fetchall()
+
+                    if len(rows) == 0:
+                        responsePackage = "not in group"
+                    else:
+                        dbcursor.execute("SELECT username FROM User_Group WHERE group_id = %s;", (package["group_id"],))
+                        responsePackage = dbcursor.fetchall()
+        try:
+            packageWithHash = hash_package(responsePackage)
+            serializedData = pickle.dumps(packageWithHash)
+            encryptedData = RSA_Methods.encrypt_with_RSA_AES(RSA_Methods.RSA.import_key(clientPublicKey), serializedData)
+            clientSocket.send(encryptedData)
+        except Exception as e:
+            print("Server> Could not send response.")
+    except Exception as e:
+        print("Server> Unspecified error occurred.\n", e)
+    finally:
+        clientSocket.close() 
 
 def broadcast_message(package, now):
     for group_id, clientSocket in receivingClients.copy():

@@ -4,6 +4,7 @@ import RSA_Methods
 import pickle
 import socket
 import threading
+import pwinput
 from Crypto.Hash import SHA256
 from datetime import datetime
 
@@ -139,7 +140,7 @@ def register_user():
             os.system("pause")
             continue
 
-        password = input("Password: ")
+        password = pwinput.pwinput(prompt="Password: ", mask='*')
         if password == "exit":
             return "back"
         if len(password) < 6 or len(password) > 20 or password == password.lower() or password == password.upper() or not has_numbers(password):
@@ -147,7 +148,7 @@ def register_user():
             os.system("pause")
             continue
 
-        confirmPassword = input("Confirm Password: ")
+        confirmPassword = pwinput.pwinput(prompt="Confirm Password: ", mask='*')
         if confirmPassword == "exit":
             return "back"
         if password != confirmPassword:
@@ -247,7 +248,7 @@ def login():
             os.system("pause")
             continue
 
-        password = input("Password: ")
+        password = pwinput.pwinput(prompt="Password: ", mask='*')
         if password == "exit":
             return "back"
         if len(password) < 6 or len(password) > 20:
@@ -449,7 +450,6 @@ def send_leavegroup_message(username, password, group_id, removeUser):
 
 def remove_from_group(username, password, group_id, leaveGroup = False):
     while(1):
-        os.system("cls")
         if leaveGroup == True:
             removeUser = username
         else:
@@ -631,6 +631,40 @@ def send_message(username, password, group_id, groupKeyHex):
             os.system("pause")
             return "back"
 
+def send_getusers_message(username, password, group_id):
+    package = {
+        "header" : "getusers",
+        "username" : username,
+        "password" : hash_value(password),
+        "group_id" : group_id
+    }
+
+    return send_package_and_retrieve_response(package, username)
+
+def get_user_list(username, password, group_id):
+    result = send_getusers_message(username, password, group_id)
+
+    if result == "no group":
+        print("This group no longer exists")
+        os.system("pause")
+        return "back"
+
+    if result == "not in group":
+        print("You are not authorized to view this groups user list.")
+        os.system("pause")
+        return "back"
+
+    if result == "fail":
+        print("Communication Error!")
+        os.system("pause")
+        return "back"
+
+    print("Group's User List:")
+    for sNo, user in enumerate(result):
+        print(sNo+1, ". ", user[0], sep="")
+
+    return result
+
 server_ip = "localhost"
 server_port = 7000
 
@@ -646,7 +680,30 @@ server_port = 7000
 # list_groups("Umer123", "MissMakran1")
 # list_groups("Umer123", "MissMakran1")
 
+def getServerInfo():
+    while(1):
+        os.system("cls")
+        try:
+            testSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            
+            server_ip = input("Enter server address: (Enter empty for localhost) ")
+            if len(server_ip) == 0:
+                server_ip = "localhost"
+                server_port = 7000
+            else:
+                server_port = int(input("Enter server port: "))
+     
+            testSocket.connect((server_ip, server_port))
+            testSocket.close()
+            return
+        except:
+            print("Invalid IP and/or Port. Try again.")
+            os.system("pause")
+            testSocket.close()
+
 def mainScreen():
+    getServerInfo()
+
     loggedUser = None
     loggedUserPassword = None
 
@@ -727,7 +784,7 @@ def selectGroupScreen(loggedUser, loggedUserPassword, group_id, group_name):
         try:
             os.system("cls")
             print("Selected Group:", group_name)
-            print("1. Enter Group Chat\n2. Add Users\n3. Remove a User\n4. Leave Group\n5. Delete Group\n6. Go back")
+            print("1. Enter Group Chat\n2. See Users List\n3. Add Users\n4. Remove a User\n5. Leave Group\n6. Delete Group\n7. Go back")
 
             choice = input("Enter a number: ")
 
@@ -735,16 +792,22 @@ def selectGroupScreen(loggedUser, loggedUserPassword, group_id, group_name):
                 os.system("cls")
                 enter_group(loggedUser, loggedUserPassword, group_id)
             elif choice == "2":
-                add_users_to_group(loggedUser, loggedUserPassword, group_id)
+                os.system("cls")
+                get_user_list(loggedUser, loggedUserPassword, group_id)
+                os.system("pause")
             elif choice == "3":
-                remove_from_group(loggedUser, loggedUserPassword, group_id)
+                add_users_to_group(loggedUser, loggedUserPassword, group_id)
             elif choice == "4":
+                os.system("cls")
+                get_user_list(loggedUser, loggedUserPassword, group_id)
+                remove_from_group(loggedUser, loggedUserPassword, group_id)
+            elif choice == "5":
                 remove_from_group(loggedUser, loggedUserPassword, group_id, True)
                 return
-            elif choice == "5":
+            elif choice == "6":
                 delete_group(loggedUser, loggedUserPassword, group_id)
                 return
-            elif choice == "6":
+            elif choice == "7":
                 return
             else:
                 print("Invalid Input. Try again.")
