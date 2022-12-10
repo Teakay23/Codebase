@@ -607,8 +607,8 @@ def send_message(username, password, group_id, groupKeyHex):
     while(1):
         message = input("Enter a message: (Enter \"\\exit\" to go back) ")
 
-        if len(message) < 1:
-            print("Cannot send empty message.")
+        if len(message) < 1 and len(message) > 100:
+            print("Message length has to be between 1 and 100 characters.")
             continue
         
         if message == "\\exit":
@@ -685,7 +685,7 @@ def getServerInfo():
         os.system("cls")
         try:
             testSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            
+
             server_ip = input("Enter server address: (Enter empty for localhost) ")
             if len(server_ip) == 0:
                 server_ip = "localhost"
