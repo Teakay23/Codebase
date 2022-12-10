@@ -6,7 +6,7 @@ import threading
 from Crypto.Hash import SHA256
 import mysql.connector
 from mysql.connector import Error
-
+from datetime import datetime
 
 def hash_package(package):
     hasher = SHA256.new()
@@ -229,10 +229,100 @@ def handle_creategroup_request(clientSocket, package):
         clientSocket.close()
 
 def handle_entergroup_request(clientSocket, package):
-    pass
+    try:
+        dbcursor = dbconnection.cursor()
+        dbcursor.execute("SELECT * FROM Users WHERE username = %s;", (package["username"],))
+        rows = dbcursor.fetchall()
+
+        if len(rows) == 0:
+            raise Exception
+        else:
+            checkPassword, temp = hash_value_with_salt(package["password"], bytes.fromhex(rows[0][2]))
+            clientPublicKey = rows[0][3]
+            if rows[0][1] != checkPassword:
+                raise Exception
+            else:
+                dbcursor.execute("SELECT admin FROM `Groups` WHERE group_id = %s;", (package["group_id"],))
+                rows = dbcursor.fetchall()
+
+                if len(rows) == 0:
+                    responsePackage = "no group"
+                else:
+                    dbcursor.execute("SELECT * FROM User_Group WHERE username = %s AND group_id = %s;", (package["username"], package["group_id"],))
+                    rows = dbcursor.fetchall()
+
+                    if len(rows) == 0:
+                        responsePackage = "not in group"
+                    else:
+                        dbcursor.execute("SELECT sender, message, time FROM Group_Messages WHERE group_id = %s;", (package["group_id"],))
+                        messages = dbcursor.fetchall()
+
+                        dbcursor.execute("SELECT `key` FROM key_storage WHERE group_id = %s;", (package["group_id"],))
+                        groupKeyHex = dbcursor.fetchall()
+
+                        responsePackage = {
+                            "groupKeyHex" : groupKeyHex[0][0],
+                            "messages" : messages
+                        }
+
+                        receivingClients.append((package["group_id"], clientSocket))
+        try:
+            packageWithHash = hash_package(responsePackage)
+            serializedData = pickle.dumps(packageWithHash)
+            encryptedData = RSA_Methods.encrypt_with_RSA_AES(RSA_Methods.RSA.import_key(clientPublicKey), serializedData)
+            clientSocket.send(encryptedData)
+        except Exception as e:
+            print("Server> Could not send response.")
+            clientSocket.close()
+                        
+    except Exception as e:
+        print("Server> Unspecified error occurred.\n", e)
+        clientSocket.close()  
 
 def handle_sendmessage_request(clientSocket, package):
-    pass
+    try:
+        dbcursor = dbconnection.cursor()
+        dbcursor.execute("SELECT * FROM Users WHERE username = %s;", (package["username"],))
+        rows = dbcursor.fetchall()
+
+        if len(rows) == 0:
+            raise Exception
+        else:
+            checkPassword, temp = hash_value_with_salt(package["password"], bytes.fromhex(rows[0][2]))
+            clientPublicKey = rows[0][3]
+            if rows[0][1] != checkPassword:
+                raise Exception
+            else:
+                dbcursor.execute("SELECT admin FROM `Groups` WHERE group_id = %s;", (package["group_id"],))
+                rows = dbcursor.fetchall()
+
+                if len(rows) == 0:
+                    responsePackage = "no group"
+                else:
+                    dbcursor.execute("SELECT * FROM User_Group WHERE username = %s AND group_id = %s;", (package["username"], package["group_id"],))
+                    rows = dbcursor.fetchall()
+
+                    if len(rows) == 0:
+                        responsePackage = "not in group"
+                    else:
+                        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                        dbcursor.execute("INSERT INTO group_messages VALUES(%s, %s, %s, %s);", (package["group_id"], package["username"], package["message"], now,))
+                        dbconnection.commit()
+                        responsePackage = "success"
+
+                        broadcast_message(package, now)
+        try:
+            packageWithHash = hash_package(responsePackage)
+            serializedData = pickle.dumps(packageWithHash)
+            encryptedData = RSA_Methods.encrypt_with_RSA_AES(RSA_Methods.RSA.import_key(clientPublicKey), serializedData)
+            clientSocket.send(encryptedData)
+        except Exception as e:
+            print("Server> Could not send response.")
+            clientSocket.close()
+    except Exception as e:
+        print("Server> Unspecified error occurred.\n", e)
+    finally:
+        clientSocket.close() 
 
 # additional functionality
 def handle_adduserstogroup_request(clientSocket, package):
@@ -378,7 +468,28 @@ def handle_deletegroup_request(clientSocket, package):
     finally:
         clientSocket.close()  
 
+def broadcast_message(package, now):
+    for group_id, clientSocket in receivingClients.copy():
+        if group_id != package["group_id"]:
+            continue
+        try:
+            message = [package["username"], package["message"], now]
 
+            dbcursor = dbconnection.cursor()
+            dbcursor.execute("SELECT `key` FROM key_storage WHERE group_id = %s;", (package["group_id"],))
+            rows = dbcursor.fetchall()
+
+            if len(rows) == 0:
+                continue
+            else:
+                packageWithHash = hash_package(message)
+                serializedData = RSA_Methods.encrypt_AES(rows[0][0], packageWithHash)
+
+            clientSocket.send(serializedData)
+        except:
+            print("Server> Connection could not be established, closing socket.")
+            clientSocket.close()
+            receivingClients.remove((group_id, clientSocket))
 try:
     dbconnection = mysql.connector.connect(host='localhost', database='IS_Chat', user='root', password='Astera@123456')
     if dbconnection.is_connected():
@@ -389,6 +500,7 @@ except Error as e:
 server_ip = "localhost"
 server_port = 7000
 RSA_Methods.generate_keys("server")
+receivingClients = []
 
 try:
     socketObj = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

@@ -52,6 +52,28 @@ def decrypt_with_RSA_AES(key, data):
 
     return plain_data
 
+def encrypt_AES(key, data):
+    serializedData = pickle.dumps(data)
+    key = bytes.fromhex(key)
+    aes_encrypt = AES.new(key, AES.MODE_EAX)
+    cipher_text, tag = aes_encrypt.encrypt_and_digest(serializedData)
+
+    encrypted_data = {
+        "data" : cipher_text,
+        "nonce" : aes_encrypt.nonce,
+        "tag" : tag
+    }
+
+    return pickle.dumps(encrypted_data)
+
+def decrypt_AES(key, data):
+    encrypted_data = pickle.loads(data)
+    key = bytes.fromhex(key)
+    aes_decrypt = AES.new(key, AES.MODE_EAX, encrypted_data["nonce"])
+    plain_data = aes_decrypt.decrypt_and_verify(encrypted_data["data"], encrypted_data["tag"])
+
+    return pickle.loads(plain_data)
+
 def generate_keys(filePrefix):
     key = RSA.generate(2048)
 

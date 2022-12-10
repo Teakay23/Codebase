@@ -3,7 +3,9 @@ import os
 import RSA_Methods
 import pickle
 import socket
+import threading
 from Crypto.Hash import SHA256
+from datetime import datetime
 
 def has_numbers(inputString):
     return bool(re.search(r'\d', inputString))
@@ -42,7 +44,7 @@ def fetch_server_key_and_encrypt(serverSocket, data):
     key = RSA_Methods.RSA.import_key(serverKeyResponse["package"])
     return RSA_Methods.encrypt_with_RSA_AES(key, data)
 
-def send_package_and_retrieve_response(package, privateKeyFilePrefix):
+def send_package_and_retrieve_response(package, privateKeyFilePrefix, keepConnectionOpen = False):
     packageWithHash = hash_package(package)
     serializedData = pickle.dumps(packageWithHash)
 
@@ -70,6 +72,9 @@ def send_package_and_retrieve_response(package, privateKeyFilePrefix):
     response = pickle.loads(response)
 
     if hash_matches(response["package"], response["hash"]):
+        if keepConnectionOpen:
+            return response["package"], serverSocket
+        
         serverSocket.close()
         return response["package"]
     else:
@@ -418,6 +423,11 @@ def add_users_to_group(username, password, group_id):
             os.system("pause")
             return "back"
 
+        if result == "fail":
+            print("Communication Error!")
+            os.system("pause")
+            return "back"
+
         print("\n")
         for result in results:
             print(result)
@@ -465,6 +475,11 @@ def remove_from_group(username, password, group_id):
             os.system("pause")
             return "back"
 
+        if result == "fail":
+            print("Communication Error!")
+            os.system("pause")
+            return "back"
+
         print(result)
         os.system("pause")
         return "back"
@@ -493,9 +508,123 @@ def delete_group(username, password, group_id):
         os.system("pause")
         return "back"
 
+    if result == "fail":
+        print("Communication Error!")
+        os.system("pause")
+        return "back"
+
     print(result)
     os.system("pause")
     return "back"
+
+def send_entergroup_message(username, password, group_id):
+    package = {
+        "header" : "entergroup",
+        "username" : username,
+        "password" : hash_value(password),
+        "group_id" : group_id
+    }
+
+    return send_package_and_retrieve_response(package, username, True)
+
+def enter_group(username, password, group_id):
+
+    result, serverSocket = send_entergroup_message(username, password, group_id)
+
+    if result == "no group":
+        print("The group you're trying to access does not exist.")
+        os.system("pause")
+        serverSocket.close()
+        return "back"
+    
+    if result == "not in group":
+        print("You are not in this group.")
+        os.system("pause")
+        serverSocket.close()
+        return "back"
+
+    if result == "fail":
+        print("Communication Error!")
+        os.system("pause")
+        return "back"
+
+    groupKeyHex = result["groupKeyHex"]
+
+    for message in result["messages"]:
+        print(format_message(groupKeyHex, message))
+
+    listeningThread = threading.Thread(target=listen_for_messages, args=(serverSocket, groupKeyHex))
+    listeningThread.start()
+
+    send_message(username, password, group_id, groupKeyHex)
+
+    serverSocket.close()
+    return "back"
+
+def format_message(symmetric_key, message):
+    decryptedMessage = RSA_Methods.decrypt_AES(symmetric_key, message[1])
+
+    if type(message[2]) != type(str()):
+        message_time = message[2].strftime('%Y-%m-%d %H:%M:%S')
+    else:
+        message_time = message[2]
+    return "[" + message_time + "] " + message[0] + "> " + decryptedMessage
+
+def listen_for_messages(serverSocket, symmetric_key):
+    while(1):
+        try:
+            serverSocket.settimeout(None)
+            response = serverSocket.recv(2048)
+        except:
+            print("Exiting group...")
+            return
+
+        response = RSA_Methods.decrypt_AES(symmetric_key, response)
+        if hash_matches(response["package"], response["hash"]):
+            print(format_message(symmetric_key, response["package"]))
+        else:
+            print("Incoming message was corrupted.")
+
+def send_sendmessage_message(username, password, group_id, groupKeyHex, message):
+    encrypted_message = RSA_Methods.encrypt_AES(groupKeyHex, message)
+
+    package = {
+        "header" : "sendmessage",
+        "username" : username,
+        "password" : hash_value(password),
+        "group_id" : group_id,
+        "message" : encrypted_message
+    }
+
+    return send_package_and_retrieve_response(package, username)
+
+def send_message(username, password, group_id, groupKeyHex):
+    while(1):
+        message = input("Enter a message: (Enter \"\\exit\" to go back) ")
+
+        if len(message) < 1:
+            print("Cannot send empty message.")
+            continue
+        
+        if message == "\\exit":
+            return "back"
+
+        result = send_sendmessage_message(username, password, group_id, groupKeyHex, message)
+
+        if result == "no group":
+            print("The group you're trying to access no longer exists.")
+            os.system("pause")
+            return "back"
+    
+        if result == "not in group":
+            print("You are no longer in this group.")
+            os.system("pause")
+            return "back"
+
+        if result == "fail":
+            print("Communication Error!")
+            os.system("pause")
+            return "back"
 
 server_ip = "localhost"
 server_port = 7000
@@ -510,4 +639,4 @@ server_port = 7000
 # add_users_to_group(u, p, 1)
 # remove_from_group("Umer123", "MissMakran1", 1)
 # list_groups("Umer123", "MissMakran1")
-delete_group("Umer123", "MissMakran1", 1)
+enter_group("Umer123", "MissMakran1", 2)
