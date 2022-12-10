@@ -61,7 +61,7 @@ def send_package_and_retrieve_response(package, privateKeyFilePrefix, keepConnec
 
     try:
         serverSocket.settimeout(500.0)
-        response = serverSocket.recv(2048)
+        response = serverSocket.recv(104857)
         serverSocket.settimeout(None)
     except:
         print("Could not receive a response.")
@@ -289,39 +289,41 @@ def send_listgroup_message(username, password):
         "password" : hash_value(password)
     }
 
-    packageWithHash = hash_package(package)
-    serializedData = pickle.dumps(packageWithHash)
+    # packageWithHash = hash_package(package)
+    # serializedData = pickle.dumps(packageWithHash)
 
-    try:
-        serverSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        serverSocket.connect((server_ip, server_port))
-        # get server public key and encrypt serialized data here
-        encrypted_data = fetch_server_key_and_encrypt(serverSocket, serializedData)
-        serverSocket.send(encrypted_data)
-    except:
-        print("Could not connect or send data to server.")
-        serverSocket.close()
-        return "fail"
+    # try:
+    #     serverSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    #     serverSocket.connect((server_ip, server_port))
+    #     # get server public key and encrypt serialized data here
+    #     encrypted_data = fetch_server_key_and_encrypt(serverSocket, serializedData)
+    #     serverSocket.send(encrypted_data)
+    # except:
+    #     print("Could not connect or send data to server.")
+    #     serverSocket.close()
+    #     return "fail"
 
-    try:
-        serverSocket.settimeout(500.0)
-        response = serverSocket.recv(2048)
-        serverSocket.settimeout(None)
-    except:
-        print("Could not receive a response.")
-        serverSocket.close()
-        return "fail"
+    # try:
+    #     serverSocket.settimeout(500.0)
+    #     response = serverSocket.recv(2048)
+    #     serverSocket.settimeout(None)
+    # except:
+    #     print("Could not receive a response.")
+    #     serverSocket.close()
+    #     return "fail"
 
-    response = RSA_Methods.decrypt_with_RSA_AES(RSA_Methods.retrieve_private_key(username), response)
-    response = pickle.loads(response)
+    # response = RSA_Methods.decrypt_with_RSA_AES(RSA_Methods.retrieve_private_key(username), response)
+    # response = pickle.loads(response)
 
-    if hash_matches(response["package"], response["hash"]):
-        serverSocket.close()
-        return response["package"]
-    else:
-        print("Server response corrupted.")
-        serverSocket.close()
-        return "fail"
+    # if hash_matches(response["package"], response["hash"]):
+    #     serverSocket.close()
+    #     return response["package"]
+    # else:
+    #     print("Server response corrupted.")
+    #     serverSocket.close()
+    #     return "fail"
+
+    return send_package_and_retrieve_response(package, username)
         
 def list_groups(username, password): # send the username and password of the currently logged in user.
     os.system('cls')
@@ -423,7 +425,7 @@ def add_users_to_group(username, password, group_id):
             os.system("pause")
             return "back"
 
-        if result == "fail":
+        if results == "fail":
             print("Communication Error!")
             os.system("pause")
             return "back"
@@ -445,18 +447,21 @@ def send_leavegroup_message(username, password, group_id, removeUser):
 
     return send_package_and_retrieve_response(package, username)
 
-def remove_from_group(username, password, group_id):
+def remove_from_group(username, password, group_id, leaveGroup = False):
     while(1):
         os.system("cls")
-        print("Enter the username you want to remove from the group: (Enter \"exit\" to go back.)")
+        if leaveGroup == True:
+            removeUser = username
+        else:
+            print("Enter the username you want to remove from the group: (Enter \"exit\" to go back.)")
 
-        removeUser = input("Username: ")
-        if removeUser == "exit":
-            return "back"
-        if len(removeUser) < 6 or len(removeUser) > 20 or " " in removeUser:
-            print("Username must contain at least 6 characters and at most 20 characters. And it must not have spaces.")
-            os.system("pause")
-            continue
+            removeUser = input("Username: ")
+            if removeUser == "exit":
+                return "back"
+            if len(removeUser) < 6 or len(removeUser) > 20 or " " in removeUser:
+                print("Username must contain at least 6 characters and at most 20 characters. And it must not have spaces.")
+                os.system("pause")
+                continue
 
         result = send_leavegroup_message(username, password, group_id, removeUser)
 
@@ -639,4 +644,97 @@ server_port = 7000
 # add_users_to_group(u, p, 1)
 # remove_from_group("Umer123", "MissMakran1", 1)
 # list_groups("Umer123", "MissMakran1")
-enter_group("Umer123", "MissMakran1", 2)
+# list_groups("Umer123", "MissMakran1")
+
+def mainScreen():
+    loggedUser = None
+    loggedUserPassword = None
+
+    while(1):
+        os.system("cls")
+        print("Welcome to Radianite Chat App")
+        print("1. Login\n2. Register User\n3. Exit\n")
+        choice = int(input("Enter a number: "))
+
+        if choice == 1:
+            result = login()
+            if result != "back":
+                loggedUser, loggedUserPassword = result
+                loggedInScreen(loggedUser, loggedUserPassword)
+        elif choice == 2:
+            register_user()
+        elif choice == 3:
+            exit(0)
+        else:
+            print("Invalid Input. Try again.")
+            os.system("pause")
+
+def loggedInScreen(loggedUser, loggedUserPassword):
+    while(1):
+        os.system("cls")
+        print("Welcome", loggedUser)
+        print("1. Create Group\n2. List Groups\n3. Log out\n")
+        choice = int(input("Enter a number: "))
+
+        if choice == 1:
+            create_group(loggedUser, loggedUserPassword)
+        elif choice == 2:
+            groupsScreen(loggedUser, loggedUserPassword)
+        elif choice == 3:
+            return
+        else:
+            print("Invalid Input. Try again.")
+            os.system("pause")
+
+def groupsScreen(loggedUser, loggedUserPassword):
+    while(1):
+        os.system("cls")
+        selectFlag = False
+        result = list_groups(loggedUser, loggedUserPassword)
+
+        if result == "back":
+            return
+        print((len(result)+1), ". Go back\n", sep="")
+        choice = int(input("Enter a number to select the group or go back: "))
+
+        if choice == len(result)+1:
+            return
+
+        for sNo, group in enumerate(result):
+            if choice == sNo+1:
+                selectGroupScreen(loggedUser, loggedUserPassword, group[0], group[1])
+                selectFlag = True
+                break
+        
+        if selectFlag == False:
+            print("Invalid Input. Try again.")
+            os.system("pause")
+
+def selectGroupScreen(loggedUser, loggedUserPassword, group_id, group_name):
+    while(1):
+        os.system("cls")
+        print("Selected Group:", group_name)
+        print("1. Enter Group Chat\n2. Add Users\n3. Remove a User\n4. Leave Group\n5. Delete Group\n6. Go back")
+
+        choice = int(input("Enter a number: "))
+
+        if choice == 1:
+            os.system("cls")
+            enter_group(loggedUser, loggedUserPassword, group_id)
+        elif choice == 2:
+            add_users_to_group(loggedUser, loggedUserPassword, group_id)
+        elif choice == 3:
+            remove_from_group(loggedUser, loggedUserPassword, group_id)
+        elif choice == 4:
+            remove_from_group(loggedUser, loggedUserPassword, group_id, True)
+            return
+        elif choice == 5:
+            delete_group(loggedUser, loggedUserPassword, group_id)
+            return
+        elif choice == 6:
+            return
+        else:
+            print("Invalid Input. Try again.")
+            os.system("pause")
+
+mainScreen()
